@@ -36,7 +36,6 @@ public class Powerup : MonoBehaviour
 
     private void ApplyPowerup()
     {
-        Debug.Log($"Collected Powerup: {type}");
         var player = EnhancedMeshGenerator.Instance;
         if (player == null) return;
 
@@ -54,12 +53,15 @@ public class Powerup : MonoBehaviour
                 break;
             case PowerupType.PW1:
                 player.hasDoubleJump = true;
+                player.NotifyPowerup("YOU GOT DOUBLE JUMP");
                 break;
             case PowerupType.PW2:
                 player.hasWallClimb = true;
+                player.NotifyPowerup("YOU GOT WALL JUMP");
                 break;
             case PowerupType.PW3:
                 player.hasDash = true;
+                player.NotifyPowerup("YOU GOT DASH");
                 break;
             case PowerupType.Collectible:
                 player.points += 100;

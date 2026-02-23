@@ -36,12 +36,29 @@ public class EnhancedMeshGenerator : MonoBehaviour
     public bool hasDash = false;
     public bool hasWallClimb = false;
     private int currentJumps = 0;
+    public float jumpCooldown = 0.7f;
+    private float jumpCooldownTimer = 0f;
     
+    [Header("Wall Jump")]
+    public float wallKickForceX = 8f;
+    public float wallKickForceY = 8f;
+    public float wallKickDuration = 0.2f;
+    public float wallJumpCooldown = 0.2f;
+    private float wallKickTimer = 0f;
+    private float wallJumpCooldownTimer = 0f;
+    private float wallKickDir = 0f;
+
     [Header("Dash")]
     public float dashForce = 15f;
     public float dashDuration = 0.2f;
+    public float dashCooldown = 0.5f;
     private float dashTimer = 0f;
+    private float dashCooldownTimer = 0f;
     private float lastHDir = 1f;
+
+    [Header("UI Announcements")]
+    private string lastPowerupName = "";
+    private float announcementTimer = 0f;
 
     private bool isInvincible = false;
     private float invincibilityTimer = 0f;
@@ -60,6 +77,7 @@ public class EnhancedMeshGenerator : MonoBehaviour
     public float constantZPosition = 0f;
     public float voidThreshold = -30f;
     public Vector3 spawnPosition = new Vector3(0, 5, 0);
+    private Vector3 lastSafePlatformPosition;
     public int points = 0;
 
     private Dictionary<int, float> disappearingTimers = new Dictionary<int, float>();
@@ -79,7 +97,14 @@ public class EnhancedMeshGenerator : MonoBehaviour
         SetupCamera();
         CreateCubeMesh();
         CreatePlayer();
-        CreateLevelFromSketch();
+        CreateLevel();
+
+        lastSafePlatformPosition = spawnPosition;
+
+        if (FindAnyObjectByType<GameUI>() == null)
+        {
+            new GameObject("GameUI").AddComponent<GameUI>();
+        }
     }
     
     void SetupCamera()
@@ -139,7 +164,7 @@ public class EnhancedMeshGenerator : MonoBehaviour
         colliderIds.Add(playerID);
     }
     
-    void CreateLevelFromSketch()
+    void CreateLevel()
     {
         AddPlatform(new Vector3(0, 0, 0), new Vector3(10, 1, 1));
         AddHP(new Vector3(-2, 2, 0)); 
@@ -253,39 +278,61 @@ public class EnhancedMeshGenerator : MonoBehaviour
         if (playerID == -1) return;
         int index = colliderIds.IndexOf(playerID);
 
-        if (hasDash && dashTimer <= 0 && Input.GetKeyDown(KeyCode.LeftShift))
+        if (dashTimer > 0) dashTimer -= Time.deltaTime;
+        if (dashCooldownTimer > 0) dashCooldownTimer -= Time.deltaTime;
+        if (announcementTimer > 0) announcementTimer -= Time.deltaTime;
+        if (wallKickTimer > 0) wallKickTimer -= Time.deltaTime;
+        if (jumpCooldownTimer > 0) jumpCooldownTimer -= Time.deltaTime;
+        if (wallJumpCooldownTimer > 0) wallJumpCooldownTimer -= Time.deltaTime;
+
+        float horizontal = 0;
+        if (Input.GetKey(KeyCode.A)) horizontal -= 1;
+        if (Input.GetKey(KeyCode.D)) horizontal += 1;
+        if (horizontal != 0) lastHDir = Mathf.Sign(horizontal);
+
+        if (hasDash && Input.GetKeyDown(KeyCode.LeftShift) && dashTimer <= 0 && dashCooldownTimer <= 0)
         {
             dashTimer = dashDuration;
+            dashCooldownTimer = dashCooldown + dashDuration;
+            playerVelocity.x = lastHDir * dashForce;
             playerVelocity.y = 0;
+            isGrounded = false;
         }
 
         if (dashTimer > 0)
         {
-            dashTimer -= Time.deltaTime;
-            Vector3 dashPos = playerPosition + new Vector3(lastHDir * dashForce * Time.deltaTime, 0, 0);
-            if (!CollisionManager.Instance.CheckCollision(playerID, dashPos, out _))
-                playerPosition.x = dashPos.x;
+            float hMove = playerVelocity.x * Time.deltaTime;
+            Vector3 hTargetPos = playerPosition + new Vector3(hMove, 0, 0);
+            if (!CheckSolidCollision(hTargetPos, out _))
+                playerPosition.x = hTargetPos.x;
             
-            playerVelocity.y = 0; 
+            CheckSolidCollision(playerPosition + new Vector3(Mathf.Sign(playerVelocity.x) * 0.1f, 0, 0), out isWalled);
         }
         else
         {
             if (Input.GetKeyDown(KeyCode.Space))
             {
                 int allowedJumps = hasDoubleJump ? 2 : 1;
-                
-                if (isGrounded || (hasWallClimb && isWalled))
+                if (isGrounded)
                 {
                     playerVelocity.y = jumpForce;
                     isGrounded = false;
                     currentJumps = 1;
-                    Debug.Log("Initial Jump");
                 }
-                else if (currentJumps < allowedJumps)
+                else if (hasWallClimb && isWalled && wallJumpCooldownTimer <= 0)
+                {
+                    playerVelocity.y = wallKickForceY;
+                    wallKickTimer = wallKickDuration;
+                    wallJumpCooldownTimer = wallJumpCooldown;
+                    wallKickDir = -lastHDir;
+                    playerVelocity.x = wallKickDir * wallKickForceX;
+                    currentJumps = 1;
+                }
+                else if (currentJumps < allowedJumps && jumpCooldownTimer <= 0)
                 {
                     playerVelocity.y = jumpForce;
+                    jumpCooldownTimer = jumpCooldown;
                     currentJumps++;
-                    Debug.Log($"Air Jump: {currentJumps}");
                 }
             }
 
@@ -294,88 +341,93 @@ public class EnhancedMeshGenerator : MonoBehaviour
                 float fallMult = playerVelocity.y < 0 ? 1.5f : 1f;
                 playerVelocity.y -= gravity * fallMult * Time.deltaTime;
             }
-        }
 
-        float horizontal = 0;
-        if (Input.GetKey(KeyCode.A)) horizontal -= 1;
-        if (Input.GetKey(KeyCode.D)) horizontal += 1;
-        if (horizontal != 0) lastHDir = Mathf.Sign(horizontal);
-        
-        if (dashTimer <= 0)
-        {
-            float hMove = horizontal * movementSpeed * Time.deltaTime;
+            float targetHVelocity = horizontal * movementSpeed;
+            if (wallKickTimer > 0) targetHVelocity = wallKickDir * wallKickForceX;
+
+            float hMove = targetHVelocity * Time.deltaTime;
             if (hMove != 0)
             {
                 Vector3 hTargetPos = playerPosition + new Vector3(hMove, 0, 0);
                 if (!CheckSolidCollision(hTargetPos, out _))
                     playerPosition.x = hTargetPos.x;
             }
-            
             CheckSolidCollision(playerPosition + new Vector3(lastHDir * 0.1f, 0, 0), out isWalled);
-        }
 
-        float vMove = playerVelocity.y * Time.deltaTime;
-
-        if (!isGrounded && hasWallClimb && isWalled && Input.GetKey(KeyCode.LeftShift))
-        {
-            playerVelocity.y = -1.5f;
-            vMove = playerVelocity.y * Time.deltaTime;
-        }
-        
-        Vector3 vTargetPos = playerPosition + new Vector3(0, vMove, 0);
-        
-        bool vCollided = false;
-        List<int> hitIds;
-        if (CollisionManager.Instance.CheckCollision(playerID, vTargetPos, out hitIds))
-        {
-            foreach (int id in hitIds)
+            float vMove = playerVelocity.y * Time.deltaTime;
+            Vector3 vTargetPos = playerPosition + new Vector3(0, vMove, 0);
+            bool vCollided = false;
+            List<int> hitIds;
+            if (CollisionManager.Instance.CheckCollision(playerID, vTargetPos, out hitIds))
             {
-                if (hiddenInstances.Contains(id)) continue;
-                var b = CollisionManager.Instance.GetBounds(id);
-                if (b == null || b.IsTrigger) continue;
-                
-                if (b.IsTemporany && playerVelocity.y <= 0 && !disappearingTimers.ContainsKey(id))
+                foreach (int id in hitIds)
                 {
-                    disappearingTimers[id] = 1.0f; 
-                }
+                    if (hiddenInstances.Contains(id)) continue;
+                    var b = CollisionManager.Instance.GetBounds(id);
+                    if (b == null || b.IsTrigger) continue;
+                    
+                    if (b.IsTemporany && playerVelocity.y <= 0 && !disappearingTimers.ContainsKey(id))
+                        disappearingTimers[id] = 1.0f;
 
-                if (b.IsOneWay)
-                {
-                    float playerPrevBottom = playerPosition.y - height * 0.5f;
-                    float platformTop = b.Max.y;
-                    if (playerVelocity.y <= 0 && playerPrevBottom >= platformTop - 0.1f)
+                    if (b.IsOneWay)
+                    {
+                        float playerPrevBottom = playerPosition.y - height * 0.5f;
+                        if (playerVelocity.y <= 0 && playerPrevBottom >= b.Max.y - 0.1f)
+                        {
+                            vCollided = true;
+                            break;
+                        }
+                    }
+                    else
                     {
                         vCollided = true;
                         break;
                     }
                 }
-                else
-                {
-                    vCollided = true;
-                    break;
-                }
             }
-        }
 
-        if (vCollided)
-        {
-            if (playerVelocity.y < 0) { isGrounded = true; currentJumps = 0; }
-            playerVelocity.y = 0;
-        }
-        else
-        {
-            playerPosition.y = vTargetPos.y;
-            if (playerVelocity.y <= 0)
+            if (vCollided)
             {
-                if (!CheckGrounded()) isGrounded = false;
-                else { isGrounded = true; currentJumps = 0; }
+                if (playerVelocity.y < 0) 
+                { 
+                    isGrounded = true; 
+                    currentJumps = 0; 
+
+                    List<int> gHits;
+                    if (CollisionManager.Instance.CheckCollision(playerID, playerPosition + Vector3.down * 0.1f, out gHits))
+                    {
+                        foreach(int id in gHits)
+                        {
+                            var b = CollisionManager.Instance.GetBounds(id);
+                            if (b != null && !b.IsTrigger && !b.IsTemporany)
+                            {
+                                lastSafePlatformPosition = new Vector3(playerPosition.x, b.Max.y + height * 0.51f, playerPosition.z);
+                                break;
+                            }
+                        }
+                    }
+                }
+                playerVelocity.y = 0;
+            }
+            else
+            {
+                playerPosition.y = vTargetPos.y;
+                if (playerVelocity.y <= 0)
+                {
+                    if (!CheckGrounded()) isGrounded = false;
+                    else 
+                    { 
+                        isGrounded = true; 
+                        currentJumps = 0; 
+                    }
+                }
             }
         }
 
         if (playerPosition.y < voidThreshold)
         {
             TakeDamage();
-            playerPosition = spawnPosition;
+            playerPosition = lastSafePlatformPosition;
             playerVelocity = Vector3.zero;
         }
 
@@ -395,7 +447,7 @@ public class EnhancedMeshGenerator : MonoBehaviour
             {
                 if (hiddenInstances.Contains(id)) continue;
                 var b = CollisionManager.Instance.GetBounds(id);
-                if (b != null && !b.IsOneWay) { hitWall = true; return true; }
+                if (b != null && !b.IsOneWay && !b.IsTrigger) { hitWall = true; return true; }
             }
         }
         return false;
@@ -413,9 +465,7 @@ public class EnhancedMeshGenerator : MonoBehaviour
                 var b = CollisionManager.Instance.GetBounds(id);
                 if (b == null || b.IsTrigger) continue;
                 if (!b.IsOneWay) return true;
-                
-                float playerBottom = playerPosition.y - height * 0.5f;
-                if (playerBottom >= b.Max.y - 0.1f) return true;
+                if (playerPosition.y - height * 0.5f >= b.Max.y - 0.1f) return true;
             }
         }
         return false;
@@ -454,10 +504,28 @@ public class EnhancedMeshGenerator : MonoBehaviour
     {
         if (isInvincible) return;
         lives--;
-        if (lives <= 0) lives = 3;
+        if (lives <= 0) 
+        {
+            lives = 3;
+            lastSafePlatformPosition = spawnPosition;
+        }
         else SetInvincibility(2f);
+        
+        playerPosition = lastSafePlatformPosition;
+        playerVelocity = Vector3.zero;
     }
     public void AddLife() => lives++;
     public void SetInvincibility(float duration) { isInvincible = true; invincibilityTimer = duration; }
     public bool IsInvincible() => isInvincible;
+
+    public void NotifyPowerup(string name)
+    {
+        lastPowerupName = name;
+        announcementTimer = 3f;
+    }
+
+    public string GetAnnouncement() => announcementTimer > 0 ? lastPowerupName : "";
+    public float GetDashCooldownRatio() => dashCooldownTimer > 0 ? (dashCooldownTimer / (dashCooldown + dashDuration)) : 0f;
+    public float GetJumpCooldownRatio() => jumpCooldownTimer > 0 ? (jumpCooldownTimer / jumpCooldown) : 0f;
+    public float GetWallJumpCooldownRatio() => wallJumpCooldownTimer > 0 ? (wallJumpCooldownTimer / wallJumpCooldown) : 0f;
 }
