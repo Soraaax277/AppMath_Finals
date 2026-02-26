@@ -462,7 +462,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4ce05d5e7992fb14097be87ea13c712a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::FinalsProjectSetup
-  material: {fileID: 2100000, guid: 59d13ce225690e64db8289d23e5cb97d, type: 2}
 --- !u!4 &1391497446
 Transform:
   m_ObjectHideFlags: 0
@@ -498,14 +497,19 @@ MonoBehaviour:
   depth: 1
   movementSpeed: 5
   gravity: 9.8
-  jumpForce: 7
+  jumpForce: 8
   lives: 3
   hasDoubleJump: 0
   hasDash: 0
   hasWallClimb: 0
-  maxJumps: 1
+  jumpCooldown: 0.7
+  wallKickForceX: 8
+  wallKickForceY: 8
+  wallKickDuration: 0.2
+  wallJumpCooldown: 0.2
   dashForce: 15
   dashDuration: 0.2
+  dashCooldown: 0.5
   cameraOffset: {x: 0, y: 0, z: -15}
   cameraSmoothSpeed: 0.1
   constantZPosition: 0

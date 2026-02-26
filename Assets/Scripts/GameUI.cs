@@ -8,7 +8,6 @@ public class GameUI : MonoBehaviour
     void Start()
     {
         player = EnhancedMeshGenerator.Instance;
-        startTime = Time.time;
     }
 
     void OnGUI()
@@ -19,7 +18,6 @@ public class GameUI : MonoBehaviour
             if (player == null) return;
         }
 
-        // 1. HUD Area
         GUIStyle hudStyle = new GUIStyle(GUI.skin.box);
         hudStyle.padding = new RectOffset(15, 15, 15, 15);
         hudStyle.fontSize = 14;
@@ -31,7 +29,6 @@ public class GameUI : MonoBehaviour
             GUILayout.Label("Φ ENERGY STATE");
             GUILayout.Space(5);
             
-            // Dash Indicator with cooldown feedback
             if (player.hasDash)
             {
                 float cooldown = player.GetDashCooldownRatio();
@@ -57,8 +54,7 @@ public class GameUI : MonoBehaviour
             }
             
             GUILayout.Space(10);
-            float elapsedTime = Time.time - startTime;
-            GUILayout.Label($"Δ TIME: {elapsedTime:F2}s");
+            GUILayout.Label($"Δ TIME: {player.totalPlayTime:F2}s");
             GUILayout.Label($"V LIFE: {player.lives}");
             GUILayout.Label($"Σ POINTS: {player.points}");
 
@@ -71,7 +67,6 @@ public class GameUI : MonoBehaviour
         }
         GUILayout.EndArea();
 
-        // 2. Power-up Announcement (Center-Top)
         string announcement = player.GetAnnouncement();
         if (!string.IsNullOrEmpty(announcement))
         {
@@ -85,16 +80,38 @@ public class GameUI : MonoBehaviour
             GUI.Label(new Rect(Screen.width/2 - 200, 50, 400, 40), announcement, announceStyle);
         }
 
-        // 3. Game Over Overlay
-        if (player.lives <= 0)
+        if (player.IsGameOver())
         {
             GUIStyle gameOverStyle = new GUIStyle(GUI.skin.label);
-            gameOverStyle.fontSize = 40;
+            gameOverStyle.fontSize = 50;
             gameOverStyle.fontStyle = FontStyle.Bold;
             gameOverStyle.alignment = TextAnchor.MiddleCenter;
             gameOverStyle.normal.textColor = Color.red;
 
-            GUI.Label(new Rect(0, 0, Screen.width, Screen.height), "SYSTEM TERMINATED", gameOverStyle);
+            GUI.Box(new Rect(0, 0, Screen.width, Screen.height), "");
+            GUI.Label(new Rect(0, 0, Screen.width, Screen.height), "YOU DIED\nSYSTEM TERMINATED", gameOverStyle);
+            
+            if (GUI.Button(new Rect(Screen.width/2 - 50, Screen.height/2 + 100, 100, 40), "Retry?"))
+            {
+                player.ResetGame();
+            }
+        }
+
+        if (player.HasWon())
+        {
+            GUIStyle winStyle = new GUIStyle(GUI.skin.label);
+            winStyle.fontSize = 50;
+            winStyle.fontStyle = FontStyle.Bold;
+            winStyle.alignment = TextAnchor.MiddleCenter;
+            winStyle.normal.textColor = Color.cyan;
+
+            GUI.Box(new Rect(0, 0, Screen.width, Screen.height), "");
+            GUI.Label(new Rect(0, 0, Screen.width, Screen.height), "YOU WIN!", winStyle);
+
+            if (GUI.Button(new Rect(Screen.width/2 - 50, Screen.height/2 + 80, 100, 40), "Retry?"))
+            {
+                player.ResetGame();
+            }
         }
     }
 }

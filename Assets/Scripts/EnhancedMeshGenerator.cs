@@ -6,7 +6,6 @@ using Quaternion = UnityEngine.Quaternion;
 using Random = UnityEngine.Random;
 using Vector3 = UnityEngine.Vector3;
 
-
 public class EnhancedMeshGenerator : MonoBehaviour
 {
     private static EnhancedMeshGenerator _instance;
@@ -17,6 +16,7 @@ public class EnhancedMeshGenerator : MonoBehaviour
     public Material playerMaterial;
     public int instanceCount = 100;
     private Mesh cubeMesh;
+    private Mesh spikeMesh;
     private List<Matrix4x4> matrices = new List<Matrix4x4>();
     private List<int> colliderIds = new List<int>();
     
@@ -26,9 +26,9 @@ public class EnhancedMeshGenerator : MonoBehaviour
     public float depth = 1f;
     
     [Header("Player Settings")]
-    public float movementSpeed = 5f;
-    public float gravity = 9.8f;
-    public float jumpForce = 7f;
+    public float movementSpeed = 6f;
+    public float gravity = 18f;
+    public float jumpForce = 8f;
     public int lives = 3;
     
     [Header("Abilities")]
@@ -79,6 +79,9 @@ public class EnhancedMeshGenerator : MonoBehaviour
     public Vector3 spawnPosition = new Vector3(0, 5, 0);
     private Vector3 lastSafePlatformPosition;
     public int points = 0;
+    private bool hasWon = false;
+    private bool isGameOver = false;
+    public float totalPlayTime = 0f;
 
     private Dictionary<int, float> disappearingTimers = new Dictionary<int, float>();
     private List<int> hiddenInstances = new List<int>();
@@ -96,6 +99,7 @@ public class EnhancedMeshGenerator : MonoBehaviour
 
         SetupCamera();
         CreateCubeMesh();
+        CreateSpikeMesh();
         CreatePlayer();
         CreateLevel();
 
@@ -150,14 +154,48 @@ public class EnhancedMeshGenerator : MonoBehaviour
         cubeMesh.RecalculateNormals();
         cubeMesh.RecalculateBounds();
     }
+
+    void CreateSpikeMesh()
+    {
+        spikeMesh = new Mesh();
+        Vector3[] vertices = new Vector3[5]
+        {
+            new Vector3(0, 0.5f, 0),
+            new Vector3(-0.5f, -0.5f, -0.5f),
+            new Vector3(0.5f, -0.5f, -0.5f),
+            new Vector3(0.5f, -0.5f, 0.5f),
+            new Vector3(-0.5f, -0.5f, 0.5f)
+        };
+        int[] triangles = new int[18]
+        {
+            0, 2, 1, 0, 3, 2, 0, 4, 3, 0, 1, 4,
+            1, 2, 3, 1, 3, 4
+        };
+        spikeMesh.vertices = vertices;
+        spikeMesh.triangles = triangles;
+        spikeMesh.RecalculateNormals();
+        spikeMesh.RecalculateBounds();
+    }
     
     void CreatePlayer()
     {
         playerPosition = spawnPosition;
+        if (CollisionManager.Instance != null)
+        {
+            CollisionManager.Instance.Clear();
+        }
+
         playerID = CollisionManager.Instance.RegisterCollider(playerPosition, new Vector3(width, height, depth), true, gameObject);
         
-        var col = GetComponent<Collider>();
-        if (col != null) Destroy(col);
+        var col = GetComponent<BoxCollider>();
+        if (col == null) col = gameObject.AddComponent<BoxCollider>();
+        col.size = new Vector3(width, height, depth);
+        col.isTrigger = true;
+
+        var rb = GetComponent<Rigidbody>();
+        if (rb == null) rb = gameObject.AddComponent<Rigidbody>();
+        rb.isKinematic = true;
+        rb.useGravity = false;
         
         Matrix4x4 playerMatrix = Matrix4x4.TRS(playerPosition, Quaternion.identity, Vector3.one);
         matrices.Add(playerMatrix);
@@ -168,11 +206,11 @@ public class EnhancedMeshGenerator : MonoBehaviour
     {
         AddPlatform(new Vector3(0, 0, 0), new Vector3(10, 1, 1));
         AddHP(new Vector3(-2, 2, 0)); 
-        AddPlatform(new Vector3(12, 2, 0), new Vector3(4, 1, 1));
-        AddC(new Vector3(12, 4, 0)); 
+        AddPlatform(new Vector3(11, 2, 0), new Vector3(4, 1, 1));
+        AddC(new Vector3(11, 4, 0)); 
         
         AddPW(new Vector3(5, 5, 0), 1); 
-        AddPlatform(new Vector3(5, 4, 0), new Vector3(2, 0.5f, 1), true);
+        AddPlatform(new Vector3(7, 4, 0), new Vector3(2, 0.5f, 1), true);
         AddC(new Vector3(3, 7, 0));
 
         AddPlatform(new Vector3(18, 5, 0), new Vector3(6, 1, 1));
@@ -194,6 +232,19 @@ public class EnhancedMeshGenerator : MonoBehaviour
         AddC(new Vector3(65, 20, 0));
         AddHP(new Vector3(70, 22, 0));
         AddPlatform(new Vector3(70, 20, 0), new Vector3(10, 1, 1)); 
+        
+        AddGoal(new Vector3(74, 21.5f, 0));
+
+        AddSpike(new Vector3(12.5f, 2.75f, 0));
+
+        AddEnemy(new Vector3(18, 5.9f, 0), 2f); 
+        AddSpike(new Vector3(37, 9.75f, 0)); 
+
+        AddSpike(new Vector3(53, 15.75f, 0));
+        AddSpike(new Vector3(57, 15.75f, 0)); 
+        
+        AddSpike(new Vector3(67, 20.75f, 0));
+        AddSpike(new Vector3(71, 20.75f, 0));
     }
 
     void AddPlatform(Vector3 pos, Vector3 scale, bool isOneWay = false, bool isTemporany = false)
@@ -244,8 +295,71 @@ public class EnhancedMeshGenerator : MonoBehaviour
         if (r != null) r.material.color = type == 1 ? Color.cyan : (type == 2 ? Color.magenta : Color.green);
     }
 
+    void AddEnemy(Vector3 pos, float range)
+    {
+        GameObject e = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        e.name = "Enemy";
+        e.transform.position = pos;
+        e.transform.localScale = Vector3.one * 0.8f;
+        var roamer = e.AddComponent<EnemyRoamer>();
+        roamer.range = range;
+        roamer.startPos = pos;
+        
+        var col = e.AddComponent<SimpleCollisionEntity>();
+        col.size = Vector3.one * 0.8f;
+        col.isTrigger = true;
+        
+        var unityCol = e.GetComponent<Collider>();
+        if (unityCol != null) unityCol.isTrigger = true;
+        
+        Renderer r = e.GetComponent<Renderer>();
+        if (r != null) r.material.color = new Color(0.5f, 0, 0);
+    }
+
+    void AddSpike(Vector3 pos)
+    {
+        GameObject s = new GameObject("Spike");
+        s.transform.position = pos;
+        s.transform.localScale = new Vector3(0.8f, 0.8f, 0.8f);
+        s.AddComponent<MeshFilter>().mesh = spikeMesh;
+        var r = s.AddComponent<MeshRenderer>();
+        r.material = material;
+        r.material.color = Color.black;
+        s.AddComponent<Hazard>().isInstakill = true;
+        var col = s.AddComponent<SimpleCollisionEntity>();
+        col.size = new Vector3(0.8f, 0.5f, 0.8f);
+        col.isTrigger = true;
+        var unityCol = s.AddComponent<BoxCollider>();
+        unityCol.isTrigger = true;
+        unityCol.size = new Vector3(0.8f, 0.5f, 0.8f);
+    }
+
+    void AddGoal(Vector3 pos)
+    {
+        GameObject g = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        g.name = "Goal";
+        g.transform.position = pos;
+        g.transform.localScale = new Vector3(1, 2, 1);
+        g.AddComponent<Goal>();
+        
+        var col = g.AddComponent<SimpleCollisionEntity>();
+        col.size = new Vector3(1, 2, 1);
+        col.isTrigger = true;
+        
+        var unityCol = g.GetComponent<Collider>();
+        if (unityCol != null) unityCol.isTrigger = true;
+        
+        Renderer r = g.GetComponent<Renderer>();
+        if (r != null) r.material.color = Color.blue;
+    }
+
     void Update()
     {
+        if (!hasWon && !isGameOver)
+        {
+            totalPlayTime += Time.deltaTime;
+        }
+
         if (invincibilityTimer > 0)
         {
             invincibilityTimer -= Time.deltaTime;
@@ -275,7 +389,7 @@ public class EnhancedMeshGenerator : MonoBehaviour
 
     void UpdatePlayer()
     {
-        if (playerID == -1) return;
+        if (playerID == -1 || hasWon || isGameOver) return;
         int index = colliderIds.IndexOf(playerID);
 
         if (dashTimer > 0) dashTimer -= Time.deltaTime;
@@ -338,11 +452,12 @@ public class EnhancedMeshGenerator : MonoBehaviour
 
             if (!isGrounded)
             {
-                float fallMult = playerVelocity.y < 0 ? 1.5f : 1f;
+                float fallMult = playerVelocity.y < 0 ? 0.7f : 1.4f; 
                 playerVelocity.y -= gravity * fallMult * Time.deltaTime;
             }
 
-            float targetHVelocity = horizontal * movementSpeed;
+            float airControlMult = isGrounded ? 1.0f : 0.7f; 
+            float targetHVelocity = horizontal * movementSpeed * airControlMult;
             if (wallKickTimer > 0) targetHVelocity = wallKickDir * wallKickForceX;
 
             float hMove = targetHVelocity * Time.deltaTime;
@@ -435,6 +550,8 @@ public class EnhancedMeshGenerator : MonoBehaviour
         matrices[index] = newMat;
         CollisionManager.Instance.UpdateCollider(playerID, playerPosition, new Vector3(width, height, depth));
         CollisionManager.Instance.UpdateMatrix(playerID, newMat);
+
+        transform.position = playerPosition;
     }
 
     bool CheckSolidCollision(Vector3 target, out bool hitWall)
@@ -500,19 +617,62 @@ public class EnhancedMeshGenerator : MonoBehaviour
         }
     }
 
-    public void TakeDamage()
+    public void TakeDamage(int amount = 1)
     {
-        if (isInvincible) return;
-        lives--;
+        if (isGameOver) return;
+
+        if (isInvincible && amount <= 1) return;
+        lives -= amount;
+        
         if (lives <= 0) 
         {
-            lives = 3;
-            lastSafePlatformPosition = spawnPosition;
+            lives = 0;
+            isGameOver = true;
+            return;
         }
-        else SetInvincibility(2f);
         
+        SetInvincibility(2f);
         playerPosition = lastSafePlatformPosition;
         playerVelocity = Vector3.zero;
+        currentJumps = 0;
+    }
+
+    public void Instakill()
+    {
+        TakeDamage(lives);
+    }
+
+    public void Win()
+    {
+        if (hasWon || isGameOver) return;
+        hasWon = true;
+    }
+
+    public bool HasWon() => hasWon;
+    public bool IsGameOver() => isGameOver;
+
+    public void ResetGame()
+    {
+        hasWon = false;
+        isGameOver = false;
+        lives = 3;
+        points = 0;
+        playerPosition = spawnPosition;
+        lastSafePlatformPosition = spawnPosition;
+        playerVelocity = Vector3.zero;
+        currentJumps = 0;
+        
+        hasDoubleJump = false;
+        hasDash = false;
+        hasWallClimb = false;
+        
+        hiddenInstances.Clear();
+        disappearingTimers.Clear();
+        
+        announcementTimer = 0;
+        lastPowerupName = "";
+        
+        UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
     }
     public void AddLife() => lives++;
     public void SetInvincibility(float duration) { isInvincible = true; invincibilityTimer = duration; }

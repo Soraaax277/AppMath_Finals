@@ -87,10 +87,16 @@ public class CollisionManager : MonoBehaviour
             {
                 GameObject go = new GameObject("CollisionManager");
                 _instance = go.AddComponent<CollisionManager>();
-                DontDestroyOnLoad(go);
             }
             return _instance;
         }
+    }
+
+    public void Clear()
+    {
+        _colliders.Clear();
+        _gameObjectMap.Clear();
+        nextID = 0;
     }
 
     private Dictionary<int, AABBBounds> _colliders = new Dictionary<int, AABBBounds>();
