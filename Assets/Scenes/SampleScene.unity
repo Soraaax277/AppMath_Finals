@@ -489,7 +489,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f811a9a31549df4396fb0854bff958d, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::EnhancedMeshGenerator
-  material: {fileID: 2100000, guid: 59d13ce225690e64db8289d23e5cb97d, type: 2}
+  material: {fileID: 2100000, guid: 66ea9a8f5f0eeec4685b2c6713be1e01, type: 2}
   playerMaterial: {fileID: 2100000, guid: 879c272834432904b8b5aac813c8ea5e, type: 2}
   instanceCount: 100
   width: 1
@@ -510,12 +510,35 @@ MonoBehaviour:
   dashForce: 15
   dashDuration: 0.2
   dashCooldown: 0.5
+  bgmSource: {fileID: 0}
+  sfxSource: {fileID: 0}
+  jumpSfx: {fileID: 8300000, guid: 0a66c65a0b2526848a8f58e394052487, type: 3}
+  landSfx: {fileID: 0}
+  hitSfx: {fileID: 8300000, guid: cb742b5510d939241bc16e9200b44a50, type: 3}
+  winSfx: {fileID: 0}
+  loseSfx: {fileID: 0}
+  collectibleSfx: {fileID: 8300000, guid: 768f2067cb706a24c906103fb20998f2, type: 3}
+  powerupSfx: {fileID: 8300000, guid: e72f51ac67b371347975242f051f3ad6, type: 3}
+  dashSfx: {fileID: 8300000, guid: 81cf3abb2291c964cba4322f5d7aec10, type: 3}
+  bgmClip: {fileID: 0}
+  jumpVfxPrefab: {fileID: 0}
+  landVfxPrefab: {fileID: 0}
+  dashVfxPrefab: {fileID: 0}
+  enemyMaterial: {fileID: 0}
+  spikeMaterial: {fileID: 0}
+  endPoleMaterial: {fileID: 0}
+  collectibleMaterial: {fileID: 0}
+  lifeMaterial: {fileID: 0}
+  dashPowerupMaterial: {fileID: 0}
+  jumpPowerupMaterial: {fileID: 0}
+  wallClimbPowerupMaterial: {fileID: 0}
   cameraOffset: {x: 0, y: 0, z: -15}
   cameraSmoothSpeed: 0.1
   constantZPosition: 0
   voidThreshold: -20
   spawnPosition: {x: 0, y: 10, z: 0}
   points: 0
+  totalPlayTime: 0
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

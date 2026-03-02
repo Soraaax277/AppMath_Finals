@@ -68,6 +68,34 @@ public class EnhancedMeshGenerator : MonoBehaviour
     private bool isGrounded = false;
     private bool isWalled = false;
     
+    [Header("Audio")]
+    public AudioSource bgmSource;
+    public AudioSource sfxSource;
+    public AudioClip jumpSfx;
+    public AudioClip landSfx;
+    public AudioClip hitSfx;
+    public AudioClip winSfx;
+    public AudioClip loseSfx;
+    public AudioClip collectibleSfx;
+    public AudioClip powerupSfx;
+    public AudioClip dashSfx;
+    public AudioClip bgmClip;
+
+    [Header("VFX Prefabs")]
+    public GameObject jumpVfxPrefab;
+    public GameObject landVfxPrefab;
+    public GameObject dashVfxPrefab;
+
+    [Header("Object Materials")]
+    public Material enemyMaterial;
+    public Material spikeMaterial;
+    public Material endPoleMaterial;
+    public Material collectibleMaterial;
+    public Material lifeMaterial;
+    public Material dashPowerupMaterial;
+    public Material jumpPowerupMaterial;
+    public Material wallClimbPowerupMaterial;
+
     [Header("Camera Settings")]
     public Vector3 cameraOffset = new Vector3(0, 0, -15);
     public float cameraSmoothSpeed = 0.1f;
@@ -81,6 +109,7 @@ public class EnhancedMeshGenerator : MonoBehaviour
     public int points = 0;
     private bool hasWon = false;
     private bool isGameOver = false;
+    private bool wasGroundedLastFrame = false;
     public float totalPlayTime = 0f;
 
     private Dictionary<int, float> disappearingTimers = new Dictionary<int, float>();
@@ -108,6 +137,21 @@ public class EnhancedMeshGenerator : MonoBehaviour
         if (FindAnyObjectByType<GameUI>() == null)
         {
             new GameObject("GameUI").AddComponent<GameUI>();
+        }
+
+        SetupAudio();
+    }
+
+    void SetupAudio()
+    {
+        if (sfxSource == null) sfxSource = gameObject.AddComponent<AudioSource>();
+        if (bgmSource == null) bgmSource = gameObject.AddComponent<AudioSource>();
+        
+        if (bgmClip != null)
+        {
+            bgmSource.clip = bgmClip;
+            bgmSource.loop = true;
+            bgmSource.Play();
         }
     }
     
@@ -258,24 +302,6 @@ public class EnhancedMeshGenerator : MonoBehaviour
     void AddC(Vector3 pos) { AddCollectible(pos, Powerup.PowerupType.Collectible); }
     void AddHP(Vector3 pos) { AddCollectible(pos, Powerup.PowerupType.ExtraLife); }
 
-    void AddCollectible(Vector3 pos, Powerup.PowerupType pType)
-    {
-        GameObject p = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        p.transform.position = pos;
-        p.transform.localScale = Vector3.one * 0.5f;
-        var pw = p.AddComponent<Powerup>();
-        pw.type = pType;
-        var col = p.AddComponent<SimpleCollisionEntity>();
-        col.size = Vector3.one * 0.5f;
-        col.isTrigger = true;
-        
-        var unityCol = p.GetComponent<Collider>();
-        if (unityCol != null) unityCol.isTrigger = true;
-        
-        Renderer r = p.GetComponent<Renderer>();
-        if (r != null) r.material.color = pType == Powerup.PowerupType.ExtraLife ? Color.red : Color.yellow;
-    }
-
     void AddPW(Vector3 pos, int type)
     {
         GameObject p = GameObject.CreatePrimitive(PrimitiveType.Sphere);
@@ -292,7 +318,55 @@ public class EnhancedMeshGenerator : MonoBehaviour
         if (unityCol != null) unityCol.isTrigger = true;
         
         Renderer r = p.GetComponent<Renderer>();
-        if (r != null) r.material.color = type == 1 ? Color.cyan : (type == 2 ? Color.magenta : Color.green);
+        if (r != null) {
+            if (type == 1) r.material = dashPowerupMaterial;
+            else if (type == 2) r.material = jumpPowerupMaterial;
+            else r.material = wallClimbPowerupMaterial;
+
+            if (r.material == null) r.material.color = type == 1 ? Color.cyan : (type == 2 ? Color.magenta : Color.green);
+        }
+    }
+
+    void AddFloatingIndicator(GameObject parent, Material mat, Vector3 offset)
+    {
+        if (mat == null) return;
+        GameObject indicator = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        indicator.name = "Indicator";
+        indicator.transform.SetParent(parent.transform);
+        indicator.transform.localPosition = offset;
+        indicator.transform.localScale = Vector3.one * 0.5f;
+        
+        // Remove collider from indicator so it doesn't mess with physics
+        Destroy(indicator.GetComponent<Collider>());
+        
+        Renderer r = indicator.GetComponent<Renderer>();
+        if (r != null) r.material = mat;
+
+        // Add a simple billboard script
+        indicator.AddComponent<BillboardIndicator>();
+    }
+
+    void AddCollectible(Vector3 pos, Powerup.PowerupType pType)
+    {
+        GameObject p = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        p.transform.position = pos;
+        p.transform.localScale = Vector3.one * 0.5f;
+        var pw = p.AddComponent<Powerup>();
+        pw.type = pType;
+        var col = p.AddComponent<SimpleCollisionEntity>();
+        col.size = Vector3.one * 0.5f;
+        col.isTrigger = true;
+        
+        var unityCol = p.GetComponent<Collider>();
+        if (unityCol != null) unityCol.isTrigger = true;
+        
+        Renderer r = p.GetComponent<Renderer>();
+        if (r != null) {
+            r.material = pType == Powerup.PowerupType.ExtraLife ? lifeMaterial : collectibleMaterial;
+            if (r.material == null) r.material.color = pType == Powerup.PowerupType.ExtraLife ? Color.red : Color.yellow;
+        }
+
+        AddFloatingIndicator(p, pType == Powerup.PowerupType.ExtraLife ? lifeMaterial : collectibleMaterial, Vector3.up * 0.7f);
     }
 
     void AddEnemy(Vector3 pos, float range)
@@ -313,7 +387,12 @@ public class EnhancedMeshGenerator : MonoBehaviour
         if (unityCol != null) unityCol.isTrigger = true;
         
         Renderer r = e.GetComponent<Renderer>();
-        if (r != null) r.material.color = new Color(0.5f, 0, 0);
+        if (r != null) {
+            r.material = enemyMaterial;
+            if (r.material == null) r.material.color = new Color(0.5f, 0, 0);
+        }
+
+        AddFloatingIndicator(e, enemyMaterial, Vector3.up * 1.0f);
     }
 
     void AddSpike(Vector3 pos)
@@ -323,8 +402,8 @@ public class EnhancedMeshGenerator : MonoBehaviour
         s.transform.localScale = new Vector3(0.8f, 0.8f, 0.8f);
         s.AddComponent<MeshFilter>().mesh = spikeMesh;
         var r = s.AddComponent<MeshRenderer>();
-        r.material = material;
-        r.material.color = Color.black;
+        r.material = spikeMaterial != null ? spikeMaterial : material;
+        if (spikeMaterial == null) r.material.color = Color.black;
         s.AddComponent<Hazard>().isInstakill = true;
         var col = s.AddComponent<SimpleCollisionEntity>();
         col.size = new Vector3(0.8f, 0.5f, 0.8f);
@@ -332,6 +411,8 @@ public class EnhancedMeshGenerator : MonoBehaviour
         var unityCol = s.AddComponent<BoxCollider>();
         unityCol.isTrigger = true;
         unityCol.size = new Vector3(0.8f, 0.5f, 0.8f);
+
+        AddFloatingIndicator(s, spikeMaterial, Vector3.up * 0.8f);
     }
 
     void AddGoal(Vector3 pos)
@@ -350,7 +431,12 @@ public class EnhancedMeshGenerator : MonoBehaviour
         if (unityCol != null) unityCol.isTrigger = true;
         
         Renderer r = g.GetComponent<Renderer>();
-        if (r != null) r.material.color = Color.blue;
+        if (r != null) {
+            r.material = endPoleMaterial;
+            if (r.material == null) r.material.color = Color.blue;
+        }
+
+        AddFloatingIndicator(g, endPoleMaterial, Vector3.up * 2.5f);
     }
 
     void Update()
@@ -411,6 +497,9 @@ public class EnhancedMeshGenerator : MonoBehaviour
             playerVelocity.x = lastHDir * dashForce;
             playerVelocity.y = 0;
             isGrounded = false;
+
+            if (sfxSource != null && dashSfx != null) sfxSource.PlayOneShot(dashSfx);
+            if (dashVfxPrefab != null) Instantiate(dashVfxPrefab, playerPosition, Quaternion.LookRotation(new Vector3(lastHDir, 0, 0)));
         }
 
         if (dashTimer > 0)
@@ -432,6 +521,7 @@ public class EnhancedMeshGenerator : MonoBehaviour
                     playerVelocity.y = jumpForce;
                     isGrounded = false;
                     currentJumps = 1;
+                    PlayJumpSfxVfx();
                 }
                 else if (hasWallClimb && isWalled && wallJumpCooldownTimer <= 0)
                 {
@@ -441,12 +531,14 @@ public class EnhancedMeshGenerator : MonoBehaviour
                     wallKickDir = -lastHDir;
                     playerVelocity.x = wallKickDir * wallKickForceX;
                     currentJumps = 1;
+                    PlayJumpSfxVfx();
                 }
                 else if (currentJumps < allowedJumps && jumpCooldownTimer <= 0)
                 {
                     playerVelocity.y = jumpForce;
                     jumpCooldownTimer = jumpCooldown;
                     currentJumps++;
+                    PlayJumpSfxVfx();
                 }
             }
 
@@ -546,6 +638,9 @@ public class EnhancedMeshGenerator : MonoBehaviour
             playerVelocity = Vector3.zero;
         }
 
+        CheckLanding();
+        wasGroundedLastFrame = isGrounded;
+
         Matrix4x4 newMat = Matrix4x4.TRS(playerPosition, Quaternion.identity, Vector3.one);
         matrices[index] = newMat;
         CollisionManager.Instance.UpdateCollider(playerID, playerPosition, new Vector3(width, height, depth));
@@ -623,14 +718,16 @@ public class EnhancedMeshGenerator : MonoBehaviour
 
         if (isInvincible && amount <= 1) return;
         lives -= amount;
-        
+
         if (lives <= 0) 
         {
             lives = 0;
             isGameOver = true;
+            if (sfxSource != null && loseSfx != null) sfxSource.PlayOneShot(loseSfx);
             return;
         }
         
+        if (sfxSource != null && hitSfx != null) sfxSource.PlayOneShot(hitSfx);
         SetInvincibility(2f);
         playerPosition = lastSafePlatformPosition;
         playerVelocity = Vector3.zero;
@@ -646,6 +743,7 @@ public class EnhancedMeshGenerator : MonoBehaviour
     {
         if (hasWon || isGameOver) return;
         hasWon = true;
+        if (sfxSource != null && winSfx != null) sfxSource.PlayOneShot(winSfx);
     }
 
     public bool HasWon() => hasWon;
@@ -688,4 +786,48 @@ public class EnhancedMeshGenerator : MonoBehaviour
     public float GetDashCooldownRatio() => dashCooldownTimer > 0 ? (dashCooldownTimer / (dashCooldown + dashDuration)) : 0f;
     public float GetJumpCooldownRatio() => jumpCooldownTimer > 0 ? (jumpCooldownTimer / jumpCooldown) : 0f;
     public float GetWallJumpCooldownRatio() => wallJumpCooldownTimer > 0 ? (wallJumpCooldownTimer / wallJumpCooldown) : 0f;
+
+    private void PlayJumpSfxVfx()
+    {
+        if (sfxSource != null && jumpSfx != null) sfxSource.PlayOneShot(jumpSfx);
+        if (jumpVfxPrefab != null) Instantiate(jumpVfxPrefab, playerPosition, Quaternion.identity);
+    }
+
+    private void CheckLanding()
+    {
+        if (isGrounded && !wasGroundedLastFrame)
+        {
+            if (sfxSource != null && landSfx != null) sfxSource.PlayOneShot(landSfx);
+            if (landVfxPrefab != null) Instantiate(landVfxPrefab, playerPosition + Vector3.down * (height * 0.5f), Quaternion.identity);
+        }
+    }
+
+    public void PlayCollectibleSfx()
+    {
+        if (sfxSource != null && collectibleSfx != null) sfxSource.PlayOneShot(collectibleSfx);
+    }
+
+    public void PlayPowerupSfx()
+    {
+        if (sfxSource != null && powerupSfx != null) sfxSource.PlayOneShot(powerupSfx);
+    }
+}
+
+public class BillboardIndicator : MonoBehaviour
+{
+    private Transform mainCam;
+
+    void Start()
+    {
+        mainCam = Camera.main != null ? Camera.main.transform : null;
+    }
+
+    void LateUpdate()
+    {
+        if (mainCam == null) mainCam = Camera.main != null ? Camera.main.transform : null;
+        if (mainCam != null)
+        {
+            transform.LookAt(transform.position + mainCam.forward);
+        }
+    }
 }
