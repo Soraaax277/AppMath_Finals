@@ -277,7 +277,43 @@ public class EnhancedMeshGenerator : MonoBehaviour
         AddHP(new Vector3(70, 22, 0));
         AddPlatform(new Vector3(70, 20, 0), new Vector3(10, 1, 1)); 
         
-        AddGoal(new Vector3(74, 21.5f, 0));
+        // --- NEW DASH SECTION ---
+        // Dash Leap: A gap that requires dashing to clear.
+        // Current platform ends at x=75. Next starts at x=82. (Gap of 7)
+        AddPlatform(new Vector3(84, 20, 0), new Vector3(4, 1, 1)); 
+        AddC(new Vector3(84, 22, 0));
+
+        // Dash Jump: A series of smaller platforms with gaps.
+        AddPlatform(new Vector3(94, 20, 0), new Vector3(4, 1, 1));
+        AddC(new Vector3(94, 22, 0));
+
+        // Hazard Sprint: A long platform with repeated spikes. Dashing makes it safer.
+        AddPlatform(new Vector3(110, 20, 0), new Vector3(20, 1, 1)); 
+        AddSpike(new Vector3(102, 20.75f, 0));
+        AddSpike(new Vector3(106, 20.75f, 0));
+        AddSpike(new Vector3(110, 20.75f, 0));
+        AddSpike(new Vector3(114, 20.75f, 0));
+        AddSpike(new Vector3(118, 20.75f, 0));
+
+        // --- PHASE 2: ADVANCED DASH ---
+        
+        // Timed Dash: Small platforms that vanish.
+        // Dash between them quickly!
+        AddPlatform(new Vector3(135, 20, 0), new Vector3(2, 0.5f, 1), false, true); // Varies from x=134 to 136
+        AddC(new Vector3(135, 21.5f, 0));
+        AddPlatform(new Vector3(142, 22, 0), new Vector3(2, 0.5f, 1), false, true); // x=141 to 143
+        AddC(new Vector3(142, 23.5f, 0));
+        AddPlatform(new Vector3(149, 24, 0), new Vector3(2, 0.5f, 1), false, true); // x=148 to 150
+        AddHP(new Vector3(149, 25.5f, 0));
+
+        // Wall Dash: High pillars requiring wall jumps and mid-air dashes.
+        AddPlatform(new Vector3(165, 25, 0), new Vector3(2, 12, 1)); // Pillar 1
+        AddPlatform(new Vector3(180, 30, 0), new Vector3(2, 12, 1)); // Pillar 2 (Higher and further)
+        AddC(new Vector3(180, 37, 0));
+        
+        // Final Path to Goal
+        AddPlatform(new Vector3(195, 28, 0), new Vector3(10, 1, 1));
+        AddGoal(new Vector3(200, 29.5f, 0));
 
         AddSpike(new Vector3(12.5f, 2.75f, 0));
 
