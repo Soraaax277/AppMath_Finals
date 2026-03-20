@@ -7,3 +7,5 @@ CV Links:
 
 Sora CV: https://docs.google.com/document/d/1zeQZOCyAaMtRjB3AjLsGNJBVMjyAQX6DP-Xo6vrA2wk/edit?usp=sharing
 Andre CV:
+
+Itch.io Link: https://soraaax277.itch.io/pure-math-platformer-game
